@@ -2,10 +2,13 @@
 ### Setting
 1. Clone this repository.
 ```
-git clone https://github.com/haewonc/qanet.git
+git clone https://github.com/haewonc/QA-Net.git
 ```
 2. Match the dependencies.
-3. Download the pretrained model [here]() and place it inside results/saved_models/.
+```
+conda env create -f requirements.txt
+```
+3. Download the pretrained model [here](https://www.icloud.com/iclouddrive/0724NAcVw1f75gE8_x7si8miA#model_final) and place it inside results/saved_models/.
    
 ### Preprocessing
 1. Download cropped, splitted, and preprocessed dataset by [TR-MISR](https://github.com/Suanmd/TR-MISR). [Google Drive](https://drive.google.com/file/d/1_ZYJqHaXmAZqVlLVxLf118_R5wp7Rt7L/view)
@@ -17,11 +20,11 @@ python preprocess.py
 ```
 
 ### Test on validation set
-1. Qualitative results
+1. Quantitative results
 ```
 python valid.py
 ```
-2. Quantitative results (TBU)
+2. Qualitative results (TBU)
 
 ### Test on test set.
 The ground-truth high-resolution images for test-set is not accessible. But you can generate submission file and submit it to the post-mortem leaderboard of the [competition](https://kelvins.esa.int/proba-v-super-resolution/). 
