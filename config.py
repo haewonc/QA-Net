@@ -16,6 +16,7 @@ class Config(object):
         self.N_heads = 1
         self.scale = 3
         self.N_lrs = 9
+        self.qem_sigmoid = True
         self.rcab_bn = False
 
         # learning

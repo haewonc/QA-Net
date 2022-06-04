@@ -65,7 +65,7 @@ class LEM(nn.Module):
         self.cnorm1 = nn.BatchNorm3d(args.N_feats)
         self.T = args.N_lrs
     
-    def forward(self, x, q):
+    def forward(self, x):
         S = x.size(3)
 
         x = spatial_expand(x, self.T)
@@ -74,7 +74,6 @@ class LEM(nn.Module):
         x = self.cnorm1(x)
         x = spatial_squeeze(x)
 
-        q = spatial_to_mha(q, self.T)
         res = spatial_to_mha(x, self.T)
         res = self.mha1(res, res, res)[0]
         res = mha_to_spatial(res, S)
@@ -84,7 +83,7 @@ class LEM(nn.Module):
         x = to_spatial(x, dim=5)
 
         res = spatial_to_mha(x, self.T)
-        res = self.mha2(q, res, res)[0]
+        res = self.mha2(res, res, res)[0]
         res = mha_to_spatial(res, S)
         x = x + res 
         x = from_spatial(x, self.T)
@@ -94,71 +93,31 @@ class LEM(nn.Module):
         return x
 
 
-class QEM(nn.Module):
-    def __init__(self, args):
-        super().__init__()
-        self.conv1 = nn.Conv3d(args.N_feats, args.N_feats, kernel_size=[1, 3, 3], stride=1, padding=[0, 1, 1])
-        self.conv2 = nn.Conv3d(args.N_feats, args.N_feats, kernel_size=[1, 3, 3], stride=1, padding=[0, 1, 1])
-        self.cnorm = nn.BatchNorm3d(args.N_feats)
-        self.is_sigmoid = args.qem_sigmoid
-        self.T = args.N_lrs
-    
-    def forward(self, x):
-        S = x.size(3)
-
-        x = spatial_expand(x, self.T)
-        res = self.conv1(x)
-        res = self.conv2(res)
-        x = x + res 
-        x = self.cnorm(x)
-        x = spatial_squeeze(x)
-    
-        if self.is_sigmoid:
-            x = F.sigmoid(x)
-
-        return x
-
-
 class QANet(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.init = nn.Conv3d(1, args.N_feats, kernel_size=[1, 3, 3], stride=1, padding=[0, 1, 1])
         lems = [LEM(args) for _ in range(args.N_modules)]
-        qems = [QEM(args) for _ in range(args.N_modules-1)]
-        args.is_sigmoid = True
-        qems.append(QEM(args))
         
         self.lems = nn.Sequential(*lems)
-        self.qems = nn.Sequential(*qems)
         self.last = nn.Conv2d(args.N_feats, 9, kernel_size=3, stride=1, padding=1)
         self.T = args.N_lrs
     
     def forward(self, x, q):
 
         x = x.unsqueeze(1)
-        q = q.unsqueeze(1)
-
         x = self.init(x)
-        q = self.init(q)
-
         x = spatial_squeeze(x)
-        q = spatial_squeeze(q)
-        
+
         x_o = x + 0.0
-        for lemt, qemt in zip(self.lems._modules.items(), self.qems._modules.items()):
+        for lemt in self.lems._modules.items():
             _, lem = lemt
-            _, qem = qemt
-            x = lem(x, q)
-            q = qem(q)
+            x = lem(x)
         x = x + x_o
 
         x = from_spatial(x, self.T)
-        q = from_spatial(q, self.T)
 
-        x = x * q
-        x = torch.sum(x, dim=1)
-        q = torch.sum(q, dim=1)
-        x = torch.div(x, q)
+        x = torch.mean(x, dim=1)
 
         x = self.last(x)
         x = F.pixel_shuffle(x, 3)

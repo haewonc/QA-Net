@@ -155,10 +155,7 @@ class QANet(nn.Module):
         x = from_spatial(x, self.T)
         q = from_spatial(q, self.T)
 
-        x = x * q
-        x = torch.sum(x, dim=1)
-        q = torch.sum(q, dim=1)
-        x = torch.div(x, q)
+        x = torch.mean(x, dim=1)
 
         x = self.last(x)
         x = F.pixel_shuffle(x, 3)

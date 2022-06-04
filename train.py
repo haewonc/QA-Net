@@ -9,7 +9,6 @@ from utils.data_loader import *
 from utils.evaluator import *
 from config import Config
 from torchvision.utils import save_image
-from net.qanet import QANet
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -21,20 +20,36 @@ torch.backends.cudnn.benchmark = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--save_dir', default='results/saved_models', help='Trained model directory')
+parser.add_argument('--modules', default=12) # 8, 10, 12
+parser.add_argument('--resblocks', default=8) # 6, 8, 10
+parser.add_argument('--split', default='all') # all, RED, NIR
+parser.add_argument('--sigmoid', default=True) # True, False
+parser.add_argument('--arch', default='qanet') # qanet, qanet_noqm, qanet_nowm
 param = parser.parse_args()
 
 model_time = time.strftime("%Y%m%d_%H%M")
+model_name = "model_{}_{}_{}_N{}_M{}".format(model_time, param.split, param.arch, param.modules, param.resblocks)
+if param.sigmoid == True:
+    model_name += "_S"
 
 # Import config
 config = Config()
+config.N_modules = int(param.modules)
+config.N_resblocks = int(param.resblocks)
+config.qem_sigmoid = bool(param.sigmoid)
 
 # Import datasets
 data_directory = config.path_prefix
 baseline_cpsnrs = readBaselineCPSNR(os.path.join(data_directory, "norm.csv"))
 train_set_directories = getImageSetDirectories(
-    os.path.join(data_directory, "train"))
-val_RED_directories = getImageSetDirectories(
-    os.path.join(data_directory, "val"), "RED")
+    os.path.join(data_directory, "train"), param.split)
+
+if param.split == 'all':
+    split = "RED"
+else: 
+    split = param.split
+val_set_directories = getImageSetDirectories(
+    os.path.join(data_directory, "val"), split)
 
 beta = config.beta
 
@@ -43,12 +58,19 @@ train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.batc
                                            drop_last=False, num_workers=config.workers, collate_fn=collateFunction(), pin_memory=True)
 
 if config.validate:
-    val_RED = ImagesetDataset(
-        imset_dir=val_RED_directories, patch_size=128, top_k=None, beta=beta)
-    val_loader_RED = torch.utils.data.DataLoader(
-        val_RED, batch_size=1, shuffle=False, drop_last=False, collate_fn=collateFunction(), pin_memory=True)
+    val_dataset = ImagesetDataset(
+        imset_dir=val_set_directories, patch_size=128, top_k=None, beta=beta)
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=1, shuffle=False, drop_last=False, collate_fn=collateFunction(), pin_memory=True)
 
 # Create model
+
+if param.arch == 'qanet':
+    from net.qanet import QANet
+elif param.arch == 'qanet_noqm':
+    from net.qanet_noqm import QANet 
+elif param.arch == 'qanet_nowm':
+    from net.qanet_nowm import QANet 
 
 model = QANet(config)
 model = model.cuda()
@@ -65,7 +87,7 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
 tot_steps = 0
 max_psnr = 0.0
 
-print(model_time)
+print(model_name)
 
 for epoch in range(config.N_epoch):
     for step, (lrs, qms, hrs, hr_maps, names) in enumerate(train_loader):
@@ -81,10 +103,6 @@ for epoch in range(config.N_epoch):
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), 15)
         optimizer.step()
-
-        if step % 100 == 99:
-            save_image(mu_sr[0], "results/train_imgs/{}_SR.png".format(step+1))
-            save_image(x_hr[0], "results/train_imgs/{}_HR.png".format(step+1))
     
     tot_steps = tot_steps+step
     scheduler.step()
@@ -92,28 +110,28 @@ for epoch in range(config.N_epoch):
     if config.validate and epoch % config.val_step == config.val_step-1:
         model.eval()
         with torch.no_grad():
-            psnr_val_red = []
+            psnr_val = []
             scores = []
-            for val_step, (lrs, qms, hrs, hr_maps, names) in enumerate(val_loader_RED):
+            for val_step, (lrs, qms, hrs, hr_maps, names) in enumerate(val_loader):
                 x_lr = lrs.float().to(config.device)
                 x_qm = qms.float().to(config.device)
                 x_hr = hrs.float().to(config.device).unsqueeze(1)
                 mask = hr_maps.float().to(config.device).unsqueeze(1)
                 
                 mu_sr = model(x_lr, x_qm)
-                
-                if val_step % 10 == 9:
-                    save_image(mu_sr, "results/val_imgs/RED_{}_SR.png".format(val_step+1))
-                    save_image(x_hr, "results/val_imgs/RED_{}_HR.png".format(val_step+1))
 
                 mu_sr = np.clip(mu_sr.cpu().detach().numpy()[0].astype(np.float64), 0, 1)
                 x_hr = x_hr.cpu().detach().numpy()[0]
                 mask = mask.cpu().detach().numpy()[0]
             
                 psnr = shift_cPSNR(mu_sr, x_hr, mask)
-                psnr_val_red.append(psnr)
+                psnr_val.append(psnr)
                 scores.append(baseline_cpsnrs[names[0]] / psnr)
 
-            print('Epoch: {}/{} | RED cPSNR: {} Score: {}'.format(epoch, config.N_epoch, np.mean(psnr_val_red), np.mean(scores)))
-         
-torch.save(model.state_dict(), os.path.join(param.save_dir,'model_final_'+model_time+'.pt'))
+            print('Epoch: {}/{} | {} cPSNR: {} Score: {}'.format(epoch, config.N_epoch, split, np.mean(psnr_val), np.mean(scores)))
+
+        if np.mean(psnr_val) > max_psnr:
+            max_psnr = np.mean(psnr_val)
+            torch.save(model.state_dict(), os.path.join(param.save_dir, model_name+'_best.pt'))
+
+torch.save(model.state_dict(), os.path.join(param.save_dir, model_name+'_final.pt'))
