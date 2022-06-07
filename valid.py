@@ -19,43 +19,59 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--save_dir', default='results/saved_models', help='Trained model directory')
+parser.add_argument('--modules', default=12) # 8, 10, 12
+parser.add_argument('--resblocks', default=8) # 6, 8, 10
+parser.add_argument('--split', default='RED') # RED, NIR
+parser.add_argument('--sigmoid', default=True) # True, False
+parser.add_argument('--arch', default='qanet') # qanet, qanet_noqm, qanet_nowm
+parser.add_argument('--model_name') # name of model to test
 param = parser.parse_args()
-
-model_time = time.strftime("%Y%m%d_%H%M")
 
 # Import config
 config = Config()
+config.N_modules = int(param.modules)
+config.N_resblocks = int(param.resblocks)
+config.qem_sigmoid = bool(param.sigmoid)
 
-# Import datasets
 data_directory = config.path_prefix
 baseline_cpsnrs = readBaselineCPSNR(os.path.join(data_directory, "norm.csv"))
-val_RED_directories = getImageSetDirectories(
-    os.path.join(data_directory, "val"), "RED")
-val_NIR_directories = getImageSetDirectories(
-    os.path.join(data_directory, "val"), "NIR")
+train_set_directories = getImageSetDirectories(
+    os.path.join(data_directory, "train"), param.split)
+
+if param.split == 'all':
+    raise RuntimeError('Invalid split: {}. Select NIR or RED'.format(param.split))
+else: 
+    split = param.split
+
 beta = config.beta
 
-val_RED = ImagesetDataset(
-    imset_dir=val_RED_directories, patch_size=128, top_k=None, beta=beta)
-val_loader_RED = torch.utils.data.DataLoader(
-    val_RED, batch_size=1, shuffle=False, drop_last=False, collate_fn=collateFunction(), pin_memory=True)
-val_NIR = ImagesetDataset(
-    imset_dir=val_NIR_directories, patch_size=128, top_k=None, beta=beta)
-val_loader_NIR = torch.utils.data.DataLoader(
-    val_NIR, batch_size=1, shuffle=False, drop_last=False, collate_fn=collateFunction(), pin_memory=True)
+val_set_directories = getImageSetDirectories(
+    os.path.join(data_directory, "val"), split)
+
+val_dataset = ImagesetDataset(
+    imset_dir=val_set_directories, patch_size=128, top_k=None, beta=beta)
+val_loader = torch.utils.data.DataLoader(
+    val_dataset, batch_size=1, shuffle=False, drop_last=False, collate_fn=collateFunction(), pin_memory=True)
+
 # Create model
 
+if param.arch == 'qanet':
+    from net.qanet import QANet
+elif param.arch == 'qanet_noqm':
+    from net.qanet_noqm import QANet 
+elif param.arch == 'qanet_nowm':
+    from net.qanet_nowm import QANet 
+
 model = QANet(config)
-model.load_state_dict(torch.load('results/saved_models/model_final.pt'))
+model.load_state_dict(torch.load(param.model_name))
 model = model.cuda()
 
 model.eval()
 
 with torch.no_grad():
-    psnr_val_red = []
+    psnr_vals = []
     scores = []
-    for val_step, (lrs, qms, hrs, hr_maps, names) in enumerate(tqdm(val_loader_RED)):
+    for val_step, (lrs, qms, hrs, hr_maps, names) in enumerate(tqdm(val_loader)):
         x_lr = lrs.float().to(config.device)
         x_qm = qms.float().to(config.device)
         x_hr = hrs.float().to(config.device).unsqueeze(1)
@@ -68,27 +84,7 @@ with torch.no_grad():
         mask = mask.cpu().detach().numpy()[0]
 
         psnr = shift_cPSNR(mu_sr, x_hr, mask)
-        psnr_val_red.append(psnr)
+        psnr_vals.append(psnr)
         scores.append(baseline_cpsnrs[names[0]] / psnr)
 
-    print('RED cPSNR: {} Score: {}'.format(np.mean(psnr_val_red), np.mean(scores)))
-
-    psnr_val_nir = []
-    scores = []
-    for val_step, (lrs, qms, hrs, hr_maps, names) in enumerate(tqdm(val_loader_NIR)):
-        x_lr = lrs.float().to(config.device)
-        x_qm = qms.float().to(config.device)
-        x_hr = hrs.float().to(config.device).unsqueeze(1)
-        mask = hr_maps.float().to(config.device).unsqueeze(1)
-        
-        mu_sr = model(x_lr, x_qm)
-
-        mu_sr = np.clip(mu_sr.cpu().detach().numpy()[0].astype(np.float64), 0, 1)
-        x_hr = x_hr.cpu().detach().numpy()[0]
-        mask = mask.cpu().detach().numpy()[0]
-
-        psnr = shift_cPSNR(mu_sr, x_hr, mask)
-        psnr_val_nir.append(psnr)
-        scores.append(baseline_cpsnrs[names[0]] / psnr)
-
-    print('NIR cPSNR: {} Score: {}'.format(np.mean(psnr_val_nir), np.mean(scores)))
+    print('{} cPSNR: {} Score: {}'.format(split, np.mean(psnr_vals), np.mean(scores)))
