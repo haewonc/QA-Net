@@ -25,6 +25,7 @@ parser.add_argument('--resblocks', default=8) # 6, 8, 10
 parser.add_argument('--split', default='all') # all, RED, NIR
 parser.add_argument('--sigmoid', default=True) # True, False
 parser.add_argument('--arch', default='qanet') # qanet, qanet_noqm, qanet_nowm
+parser.add_argument('--scheduler', default=1, type=int) # 1, 2, 3
 param = parser.parse_args()
 
 model_time = time.strftime("%Y%m%d_%H%M")
@@ -81,8 +82,20 @@ print('No. params: %d' % (sum(p.numel()
 # Train
 optimizer = torch.optim.Adam(
     model.parameters(), lr=1e-4, weight_decay=1e-5)
-scheduler = torch.optim.lr_scheduler.MultiStepLR(
-    optimizer, [120, 220, 300, 360], gamma=0.8, last_epoch=-1)
+
+if param.scheduler == 1:
+    config.N_epoch = 440
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer, [120, 220, 300, 360, 400], gamma=0.8, last_epoch=-1)
+elif param.scheduler == 2:
+    config.N_epoch = 460
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer, [100, 200, 300, 400], gamma=0.6, last_epoch=-1)
+elif param.scheduler == 3:
+    config.N_epoch = 455
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=56, T_mult=1.5
+    )
 
 tot_steps = 0
 max_psnr = 0.0
