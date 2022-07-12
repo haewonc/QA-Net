@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from utils.utils import *
 from utils.data_loader import *
-from utils.evaluator import *
+from utils.evaluator import shift_cPSNR, shift_cSSIM
 from config import Config
 from torchvision.utils import save_image
 from net.qanet import QANet
@@ -54,6 +54,7 @@ model.eval()
 
 with torch.no_grad():
     psnr_val_red = []
+    ssim_val_red = []
     scores = []
     for val_step, (lrs, qms, hrs, hr_maps, names) in enumerate(tqdm(val_loader_RED)):
         x_lr = lrs.float().to(config.device)
@@ -68,12 +69,15 @@ with torch.no_grad():
         mask = mask.cpu().detach().numpy()[0]
 
         psnr = shift_cPSNR(mu_sr, x_hr, mask)
+        ssim = shift_cSSIM(mu_sr, x_hr, mask)
         psnr_val_red.append(psnr)
+        ssim_val_red.append(ssim)
         scores.append(baseline_cpsnrs[names[0]] / psnr)
 
-    print('RED cPSNR: {} Score: {}'.format(np.mean(psnr_val_red), np.mean(scores)))
+    print('RED cPSNR: {} cSSIM: {} Score: {}'.format(np.mean(psnr_val_red), np.mean(ssim_val_red), np.mean(scores)))
 
     psnr_val_nir = []
+    ssim_val_nir = []
     scores = []
     for val_step, (lrs, qms, hrs, hr_maps, names) in enumerate(tqdm(val_loader_NIR)):
         x_lr = lrs.float().to(config.device)
@@ -88,7 +92,9 @@ with torch.no_grad():
         mask = mask.cpu().detach().numpy()[0]
 
         psnr = shift_cPSNR(mu_sr, x_hr, mask)
+        ssim = shift_cSSIM(mu_sr, x_hr, mask)
         psnr_val_nir.append(psnr)
+        ssim_val_nir.append(ssim)
         scores.append(baseline_cpsnrs[names[0]] / psnr)
 
-    print('NIR cPSNR: {} Score: {}'.format(np.mean(psnr_val_nir), np.mean(scores)))
+    print('NIR cPSNR: {} cSSIM: {} Score: {}'.format(np.mean(psnr_val_nir), np.mean(ssim_val_nir), np.mean(scores)))

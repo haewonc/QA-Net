@@ -1,1 +1,3 @@
 results/saved_models/*
+*.pyc
+__pycache__/
