@@ -20,7 +20,7 @@ class Config(object):
 
         # learning
         self.batch_size = 10
-        self.N_epoch = 400
+        self.N_epoch = 520
         self.learning_rate = 1e-4
         self.workers = 4
         self.patch_size = 32

@@ -44,7 +44,7 @@ train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.batc
 
 if config.validate:
     val_RED = ImagesetDataset(
-        imset_dir=val_RED_directories, patch_size=128, top_k=None, beta=beta)
+        imset_dir=val_RED_directories, patch_size=128, top_k=config.N_lrs, beta=beta)
     val_loader_RED = torch.utils.data.DataLoader(
         val_RED, batch_size=1, shuffle=False, drop_last=False, collate_fn=collateFunction(), pin_memory=True)
 
@@ -60,7 +60,7 @@ print('No. params: %d' % (sum(p.numel()
 optimizer = torch.optim.Adam(
     model.parameters(), lr=1e-4, weight_decay=1e-5)
 scheduler = torch.optim.lr_scheduler.MultiStepLR(
-    optimizer, [120, 220, 300, 360], gamma=0.8, last_epoch=-1)
+    optimizer, [120, 220, 300, 360, 400, 440, 480], gamma=0.8, last_epoch=-1)
 
 tot_steps = 0
 max_psnr = 0.0
@@ -79,7 +79,9 @@ for epoch in range(config.N_epoch):
         mu_sr = model(x_lr, x_qm)
         loss = -get_loss(mu_sr, x_hr, mask)
         loss.backward()
+        
         nn.utils.clip_grad_norm_(model.parameters(), 15)
+
         optimizer.step()
 
         if step % 100 == 99:

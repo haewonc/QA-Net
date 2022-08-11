@@ -8,7 +8,7 @@ git clone https://github.com/haewonc/QA-Net.git
 ```
 conda env create -f requirements.txt
 ```
-3. Download the pretrained model [here](https://www.icloud.com/iclouddrive/0724NAcVw1f75gE8_x7si8miA#model_final) and place it inside results/saved_models/.
+3. Download the pretrained model [here](https://drive.google.com/drive/folders/1MK2i-dPdFSm0vrU-sYXRNS8yikUdkErM?usp=sharing) and place it inside results/saved_models/.
    
 ### Preprocessing
 1. Download cropped, splitted, and preprocessed dataset by [TR-MISR](https://github.com/Suanmd/TR-MISR). [Google Drive](https://drive.google.com/file/d/1_ZYJqHaXmAZqVlLVxLf118_R5wp7Rt7L/view)
@@ -18,7 +18,7 @@ conda env create -f requirements.txt
 cd utils
 python preprocess.py
 ```
-
+Or you can just download our preprocessed dataset. [Google Drive](https://drive.google.com/drive/folders/1MK2i-dPdFSm0vrU-sYXRNS8yikUdkErM?usp=sharing)
 ### Test on validation set
 1. Quantitative results
 ```
@@ -38,3 +38,4 @@ python predict.py
 python train.py
 ```
 2. Check saved images during training in results/train_imgs and results/val_imgs.
+3. You can change the data directory, number of modules, batch size, and total number of epochs by editing the `config.py`.

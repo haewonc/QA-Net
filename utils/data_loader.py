@@ -12,7 +12,6 @@ from skimage import io
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
-import albumentations as A
 
 def get_patch(img, x, y, size=32):
     
@@ -73,8 +72,7 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
         create_patches: bool, samples a random patch or returns full image (default).
         patch_size: int, size of low-res patch.
         top_k: int, number of low-res views to read.
-            If top_k = None (default), low-views are loaded in the order of clearance.
-            Otherwise, top_k views are sampled with probability proportional to their clearance.
+            If top_k = None (default), low-views are loaded in the random order
         beta: float, parameter for random sampling of a reference proportional to its clearance.
         load_lr_maps: bool, reads the status maps for the LR views (default=True).
     Returns:
@@ -88,7 +86,24 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
 
     # Read asset names
     idx_names = np.array([basename(path)[2:-4] for path in glob.glob(join(imset_dir, 'QM*.png'))])
-    idx_names = np.random.choice(idx_names, 9, replace=False) # Random shuffle 
+
+    clearances = np.zeros(len(idx_names))
+    if isfile(join(imset_dir, 'clearance.npy')):
+        try:
+            clearances = np.load(join(imset_dir, 'clearance.npy'))  # load clearance scores
+        except Exception as e:
+            print("please call the save_clearance.py before call DataLoader")
+            print(e)
+    else:
+        raise Exception("please call the save_clearance.py before call DataLoader")
+
+    if top_k is not None and top_k > 0:
+        idx_names = np.random.choice(idx_names, top_k, replace=False) # Random shuffle 
+    else:
+        i_clear_sorted = np.argsort(clearances)[::-1]  # max to min
+        clearances = clearances[i_clear_sorted]
+        idx_names = idx_names[i_clear_sorted]
+        idx_names = idx_names[:9]
 
     lr_images = np.array([io.imread(join(imset_dir, f'LR{i}.png')) for i in idx_names], dtype=np.uint16)
     qm_images = np.array([io.imread(join(imset_dir, f'QM{i}.png')) for i in idx_names], dtype=np.bool)

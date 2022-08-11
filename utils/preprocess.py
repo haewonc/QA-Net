@@ -15,7 +15,7 @@ parser.add_argument("--ddir", help="path of the dataset", default='../../probav_
 args = parser.parse_args()
 
 dataset_dir = args.ddir
-ITER = 100
+ITER = 500
 L = 9
 
 # validation set loading
