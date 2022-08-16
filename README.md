@@ -1,4 +1,9 @@
 # QA-Net
+### General
+- [Preprint](https://arxiv.org/abs/2202.13124)
+- [Supplementary Document](https://drive.google.com/file/d/1_ajvA3k8IUONUUs5oyMDCLLYiZh4lbZo/view?usp=sharing)
+- [Competition Homepage](https://live.kelvins.esa.int/proba-v-super-resolution/)
+
 ### Setting
 1. Clone this repository.
 ```
